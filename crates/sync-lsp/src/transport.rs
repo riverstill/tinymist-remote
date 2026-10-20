@@ -2,12 +2,19 @@
 
 use std::{
     io::{self, BufRead, Read, Write},
+    net::{SocketAddr, TcpListener},
     thread,
 };
 
 use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
 
 use crate::{Connection, ConnectionRx, ConnectionTx, GetMessageKind, Message};
+
+/// The prefix of the authentication preamble in the TCP transport.
+///
+/// The client must send a single line, `TINYMIST-AUTH <token>`, before the LSP
+/// stream when the server is configured with an auth token.
+pub const AUTH_PREFIX: &str = "TINYMIST-AUTH ";
 
 /// Convenience cli arguments for setting up a transport with an optional mirror
 /// or replay file.
@@ -101,6 +108,112 @@ fn with_stdio_transport_impl(
     io_threads.join_write()?;
 
     Ok(())
+}
+
+/// Serves a language server over the given input and output streams.
+///
+/// The stream factories are called on the dedicated reader and writer threads
+/// respectively, so that socket-backed and pipe-backed streams can be created
+/// lazily.
+pub fn with_stream_transport<M: TryFrom<Message, Error = anyhow::Error> + GetMessageKind>(
+    kind: crate::MessageKind,
+    inp: impl FnOnce() -> Box<dyn BufRead> + Send + Sync + 'static,
+    out: impl FnOnce() -> Box<dyn Write> + Send + Sync + 'static,
+    f: impl FnOnce(Connection<M>) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let (event_sender, event_receiver) = unbounded::<crate::Event>();
+    let (lsp_sender, lsp_receiver, io_threads) = io_transport(kind, inp, out);
+
+    let connection = Connection {
+        sender: ConnectionTx {
+            event: event_sender,
+            lsp: lsp_sender,
+            marker: std::marker::PhantomData,
+        },
+        receiver: ConnectionRx {
+            event: event_receiver,
+            lsp: lsp_receiver,
+            marker: std::marker::PhantomData,
+        },
+    };
+
+    f(connection.into())?;
+
+    io_threads.join_write()?;
+
+    Ok(())
+}
+
+/// Serves a language server over a single TCP connection.
+///
+/// The server accepts exactly one connection and returns once the peer closes
+/// the connection or sends an exit notification. Deployment-level supervisors
+/// (systemd, docker restart policies, ...) are expected to restart the process
+/// for the next session, since the language server state is bound to a single
+/// client.
+pub fn with_tcp_transport<M: TryFrom<Message, Error = anyhow::Error> + GetMessageKind>(
+    addr: SocketAddr,
+    auth_token: Option<String>,
+    f: impl FnOnce(Connection<M>) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let listener = TcpListener::bind(addr)?;
+    let local = listener.local_addr()?;
+    log::info!("language server listening on tcp://{local}");
+
+    let (stream, peer) = listener.accept()?;
+    log::info!("language server accepted a tcp connection from {peer}");
+    // The listener must not accept a second session, as the server state is
+    // bound to a single client.
+    drop(listener);
+
+    stream.set_nodelay(true).ok();
+
+    let read_half = stream.try_clone()?;
+    let mut reader = io::BufReader::new(read_half);
+
+    if let Some(expected) = auth_token {
+        verify_tcp_auth(&mut reader, &expected)?;
+    }
+
+    with_stream_transport(
+        M::MESSAGE_KIND,
+        move || Box::new(reader),
+        move || Box::new(stream),
+        f,
+    )
+}
+
+/// Verifies the authentication preamble of a TCP connection.
+fn verify_tcp_auth(reader: &mut impl BufRead, expected: &str) -> anyhow::Result<()> {
+    let mut line = String::new();
+    if reader.read_line(&mut line)? == 0 {
+        anyhow::bail!("client closed the connection before authentication");
+    }
+
+    let line = line.trim_end_matches(['\r', '\n']);
+    let Some(token) = line.strip_prefix(AUTH_PREFIX) else {
+        anyhow::bail!("malformed authentication preamble");
+    };
+
+    if !constant_time_eq(token.as_bytes(), expected.as_bytes()) {
+        anyhow::bail!("invalid authentication token");
+    }
+
+    Ok(())
+}
+
+/// Compares two byte strings without leaking the length of the common prefix
+/// through timing.
+pub fn constant_time_eq(lhs: &[u8], rhs: &[u8]) -> bool {
+    if lhs.len() != rhs.len() {
+        return false;
+    }
+
+    let mut diff = 0u8;
+    for (l, r) in lhs.iter().zip(rhs) {
+        diff |= *l ^ *r;
+    }
+    diff == 0
 }
 
 /// Creates an LSP connection via io.
@@ -231,5 +344,75 @@ impl<R: Read + BufRead, W: Write> BufRead for MirrorWriter<R, W> {
         }
 
         self.0.consume(amt);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_constant_time_eq() {
+        assert!(constant_time_eq(b"secret", b"secret"));
+        assert!(!constant_time_eq(b"secret", b"secreT"));
+        assert!(!constant_time_eq(b"secret", b"secret "));
+        assert!(!constant_time_eq(b"", b"secret"));
+        assert!(constant_time_eq(b"", b""));
+    }
+
+    #[test]
+    fn test_verify_tcp_auth() {
+        let mut input =
+            io::BufReader::new(&b"TINYMIST-AUTH token\r\nContent-Length: 0\r\n\r\n"[..]);
+        verify_tcp_auth(&mut input, "token").unwrap();
+        let mut rest = String::new();
+        input.read_line(&mut rest).unwrap();
+        assert_eq!(rest, "Content-Length: 0\r\n");
+
+        let mut input = io::BufReader::new(&b"TINYMIST-AUTH wrong\r\n"[..]);
+        assert!(verify_tcp_auth(&mut input, "token").is_err());
+
+        let mut input = io::BufReader::new(&b"not-a-preamble\r\n"[..]);
+        assert!(verify_tcp_auth(&mut input, "token").is_err());
+
+        let mut input = io::BufReader::new(&b""[..]);
+        assert!(verify_tcp_auth(&mut input, "token").is_err());
+    }
+
+    #[test]
+    fn test_tcp_transport_roundtrip() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+
+        let server = thread::spawn(move || {
+            with_tcp_transport::<crate::LspMessage>(addr, None, |conn| {
+                let msg = conn.receiver.recv()?;
+                let crate::EventOrMessage::Msg(crate::LspMessage::Notification(notif)) = msg else {
+                    anyhow::bail!("unexpected message");
+                };
+                assert_eq!(notif.method, "exit");
+                Ok(())
+            })
+        });
+
+        // Waits for the server to bind the address.
+        let mut stream = None;
+        for _ in 0..100 {
+            match std::net::TcpStream::connect(addr) {
+                Ok(s) => {
+                    stream = Some(s);
+                    break;
+                }
+                Err(_) => thread::sleep(std::time::Duration::from_millis(10)),
+            }
+        }
+        let mut stream = stream.expect("cannot connect to the tcp transport");
+
+        let body = r#"{"jsonrpc":"2.0","method":"exit"}"#;
+        write!(stream, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
+        stream.flush().unwrap();
+
+        server.join().unwrap().unwrap();
     }
 }

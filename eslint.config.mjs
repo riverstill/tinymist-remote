@@ -5,7 +5,9 @@ import path from "node:path";
 import js from "@eslint/js";
 import { FlatCompat } from "@eslint/eslintrc";
 
-const __dirname = path.dirname(import.meta.dirname);
+// `import.meta.dirname` is the directory that contains this config, i.e. the
+// repository root, where the node modules are installed.
+const __dirname = import.meta.dirname;
 const compat = new FlatCompat({
   baseDirectory: __dirname,
   recommendedConfig: js.configs.recommended,

@@ -133,6 +133,24 @@ To configure path to search fonts:
 
 For a reproducible setup, the shared embedded-font inventory, and package-path examples that affect preview and export the same way, see [Compiler Settings](https://myriad-dreamin.github.io/tinymist/feature/compiler-settings.html).
 
+### Using a Remote Language Server
+
+The extension can connect to a tinymist server deployed on another machine, instead of starting a local one:
+
+1. Deploy the server on the remote machine:
+   ```bash
+   TINYMIST_AUTH_TOKEN=<random-token> tinymist lsp --ws 0.0.0.0:23626
+   ```
+
+1. Open settings and search for “Tinymist Remote Server Endpoint”, then set it to `ws://your-server:23626` (or `tcp://your-server:23626` for `tinymist lsp --tcp`). Fill “Tinymist Remote Server Token” with the same token as the server’s.
+2. Reload the window or restart the vscode editor to make the settings take effect.
+
+In remote mode, the files of the workspace are streamed to the server on demand, so the server does not need a copy of the workspace.
+
+**Note:** the language server loads fonts from the machine it runs on. Fonts installed on your local machine are not visible to a remote server, and the “Tinymist Font Paths” setting does not apply in this mode. Install the fonts on the server instead, either system-wide or via the `--font-path` argument of the `tinymist lsp` command. Otherwise, documents report `unknown font family` errors.
+
+**Note:** capabilities that rely on a local process, such as the debug adapter and the coverage runner, are unavailable in remote mode.
+
 ### Configuring path to root directory
 
 To configure the root path resolved for Typst compiler:

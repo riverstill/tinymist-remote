@@ -621,6 +621,63 @@
           ],
           "default": null
         },
+        "tinymist.remoteEndpoint": {
+          "title": "%extension.tinymist.config.tinymist.remoteEndpoint.title%",
+          "markdownDescription": "%extension.tinymist.config.tinymist.remoteEndpoint.desc%",
+          "scope": "window",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "ws://192.168.8.112:23626"
+        },
+        "tinymist.remoteToken": {
+          "title": "%extension.tinymist.config.tinymist.remoteToken.title%",
+          "markdownDescription": "%extension.tinymist.config.tinymist.remoteToken.desc%",
+          "scope": "window",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "123456"
+        },
+        "tinymist.remotePreviewHost": {
+          "title": "%extension.tinymist.config.tinymist.remotePreviewHost.title%",
+          "markdownDescription": "%extension.tinymist.config.tinymist.remotePreviewHost.desc%",
+          "scope": "window",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tinymist.remotePathMap": {
+          "title": "%extension.tinymist.config.tinymist.remotePathMap.title%",
+          "markdownDescription": "%extension.tinymist.config.tinymist.remotePathMap.desc%",
+          "scope": "window",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "local": {
+                "type": "string",
+                "title": "%extension.tinymist.config.tinymist.remotePathMap.local.title%",
+                "description": "%extension.tinymist.config.tinymist.remotePathMap.local.desc%"
+              },
+              "remote": {
+                "type": "string",
+                "title": "%extension.tinymist.config.tinymist.remotePathMap.remote.title%",
+                "description": "%extension.tinymist.config.tinymist.remotePathMap.remote.desc%"
+              }
+            },
+            "required": [
+              "local",
+              "remote"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
         "tinymist.trace.server": {
           "title": "%extension.tinymist.config.tinymist.trace.server.title%",
           "markdownDescription": "%extension.tinymist.config.tinymist.trace.server.desc%",

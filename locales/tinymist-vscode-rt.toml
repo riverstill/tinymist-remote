@@ -100,6 +100,10 @@ zh = "无效的页码范围格式：{range}"
 en = "Invalid page range: {range}"
 zh = "无效的页码范围：{range}"
 
+["Lost the connection to the tinymist server at {0}."]
+en = "Lost the connection to the tinymist server at {0}."
+zh = "与位于 {0} 的 Tinymist 服务器断开连接。"
+
 ["PDF (Specific Pages)"]
 en = "PDF (Specific Pages)"
 zh = "PDF (指定页码)"
@@ -154,6 +158,10 @@ en = "SVG (Specific Pages)"
 ["SVG (Task)"]
 en = "SVG (Task)"
 zh = "SVG (任务)"
+
+["Show Log"]
+en = "Show Log"
+zh = "显示日志"
 
 ["Specify the pages you want to export"]
 en = "Specify the pages you want to export"

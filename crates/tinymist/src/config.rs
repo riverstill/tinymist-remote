@@ -894,6 +894,35 @@ impl Config {
         Arc::new(SystemAccessModel {})
     }
 
+    /// Creates an access model that delegates the file requests to the client.
+    #[cfg(not(feature = "system"))]
+    fn create_delegated_access_model(
+        &self,
+        client: &TypedLspClient<ServerState>,
+    ) -> Arc<dyn LspAccessModel> {
+        self.watch_access_model(client).clone() as Arc<dyn LspAccessModel>
+    }
+
+    /// Creates an access model that delegates the file requests to the client.
+    ///
+    /// The local file system is still consulted first, so that the server can
+    /// read its own resources (for example, Typst packages installed on the
+    /// server) without asking the client.
+    #[cfg(feature = "system")]
+    fn create_delegated_access_model(
+        &self,
+        client: &TypedLspClient<ServerState>,
+    ) -> Arc<dyn LspAccessModel> {
+        use reflexo_typst::vfs::system::SystemAccessModel;
+
+        use crate::input::FallbackAccessModel;
+
+        Arc::new(FallbackAccessModel {
+            local: SystemAccessModel {},
+            remote: self.watch_access_model(client).clone(),
+        })
+    }
+
     pub(crate) fn watch_access_model(
         &self,
         client: &TypedLspClient<ServerState>,
@@ -912,7 +941,7 @@ impl Config {
                 self.delegate_fs_requests
             );
             if self.delegate_fs_requests {
-                Derived(self.watch_access_model(client).clone() as Arc<dyn LspAccessModel>)
+                Derived(self.create_delegated_access_model(client))
             } else {
                 Derived(self.create_physical_access_model(client))
             }

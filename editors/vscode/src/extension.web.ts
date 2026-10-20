@@ -14,6 +14,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
     web: true,
     lsp: true,
     lspSystem: false,
+    remote: false,
     export: false,
     task: false,
     wordSeparator: true,

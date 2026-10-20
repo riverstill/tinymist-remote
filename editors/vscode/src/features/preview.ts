@@ -27,6 +27,9 @@ import {
 import { l10nMsg } from "../l10n";
 import { IContext } from "../context";
 import { extensionState } from "../state";
+import { loadTinymistConfig } from "../config";
+import { remotePreviewHost, remotePreviewUrl } from "../remote-config";
+import { toRemotePath } from "./remote-paths";
 import {
   invalidatePreviewerCache,
   preloadPreviewer,
@@ -514,7 +517,7 @@ async function launchPreviewLsp(task: LaunchInBrowserTask | LaunchInWebViewTask)
   const isHandledByPreviewer = kind === "webview" && !!resolvedPreviewer?.handlePreview;
 
   if (isPrimary && !isHandledByPreviewer) {
-    const connectUrl = translateExternalURL(`ws://127.0.0.1:${dataPlanePort}`);
+    const connectUrl = translateExternalURL(localDataPlaneHost(dataPlanePort));
     contentPreviewProvider.then((p) => p.postActivate(connectUrl));
     disposes.add(() => {
       contentPreviewProvider.then((p) => p.postDeactivate(connectUrl));
@@ -570,7 +573,11 @@ async function launchPreviewLsp(task: LaunchInBrowserTask | LaunchInWebViewTask)
       break;
     }
     case "browser": {
-      vscode.env.openExternal(vscode.Uri.parse(`http://127.0.0.1:${staticServerPort}`));
+      const previewHost = remotePreviewHost(loadTinymistConfig());
+      const url = previewHost
+        ? remotePreviewUrl(previewHost, staticServerPort, "http")
+        : `http://127.0.0.1:${staticServerPort}`;
+      vscode.env.openExternal(vscode.Uri.parse(url));
       break;
     }
   }
@@ -598,7 +605,11 @@ async function launchPreviewLsp(task: LaunchInBrowserTask | LaunchInWebViewTask)
 
     console.log(`Preview Command ${filePath}`);
     const previewInSlideModeArgs = task.mode === "slide" ? ["--preview-mode=slide"] : [];
-    const dataPlaneHostArgs = !isDev ? ["--data-plane-host", "127.0.0.1:0"] : [];
+    // A remote preview server must be reachable from the client, so it binds
+    // all interfaces instead of the loopback device.
+    const previewHost = remotePreviewHost(loadTinymistConfig());
+    const dataPlaneHost = previewHost ? "0.0.0.0:0" : "127.0.0.1:0";
+    const dataPlaneHostArgs = !isDev || previewHost ? ["--data-plane-host", dataPlaneHost] : [];
 
     const previewArgs = [
       "--task-id",
@@ -606,7 +617,7 @@ async function launchPreviewLsp(task: LaunchInBrowserTask | LaunchInWebViewTask)
       ...dataPlaneHostArgs,
       ...previewInSlideModeArgs,
       ...(isNotPrimary ? ["--not-primary"] : []),
-      filePath,
+      toRemotePath(filePath),
     ];
 
     const { dataPlanePort, staticServerPort, isPrimary } = await (isBrowsing
@@ -700,7 +711,8 @@ async function launchPreviewLsp(task: LaunchInBrowserTask | LaunchInWebViewTask)
   ) {
     const scrollRequest: PanelScrollOrCursorMoveRequest = {
       event,
-      filepath: editorToReport.document.uri.fsPath,
+      // The server resolves paths in its own path space.
+      filepath: toRemotePath(editorToReport.document.uri.fsPath),
       line: editorToReport.selection.active.line,
       character: editorToReport.selection.active.character,
     };
@@ -709,10 +721,20 @@ async function launchPreviewLsp(task: LaunchInBrowserTask | LaunchInWebViewTask)
 }
 
 function localDataPlaneHost(dataPlanePort: string | number): string {
+  const previewHost = remotePreviewHost(loadTinymistConfig());
+  if (previewHost) {
+    return remotePreviewUrl(previewHost, dataPlanePort, "ws");
+  }
   return `ws://127.0.0.1:${dataPlanePort}`;
 }
 
 async function externalDataPlaneHost(dataPlanePort: string | number): Promise<string> {
+  // A remote preview server is reached directly instead of being forwarded.
+  const previewHost = remotePreviewHost(loadTinymistConfig());
+  if (previewHost) {
+    return remotePreviewUrl(previewHost, dataPlanePort, "ws");
+  }
+
   const uri = await vscode.env.asExternalUri(vscode.Uri.parse(`http://127.0.0.1:${dataPlanePort}`));
   return uri.toString().replace(/^http/, "ws");
 }

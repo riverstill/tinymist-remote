@@ -389,7 +389,14 @@ impl<F: FnMut(FilesystemEvent) + Send + Sync> NotifyActor<F> {
             if self.watcher.is_some() {
                 self.watch_file_if_needed(path, contained);
 
-                changeset.may_insert(self.notify_entry_update(path.clone()));
+                // The file may not exist on the local file system at all: the
+                // content can be provided by the client of the language server
+                // (see the delegated file system requests). Snapshots from the
+                // local file system must not override such content, otherwise
+                // the file would be marked as missing again and again.
+                if self.inner.is_watchable_file(path.as_ref()) {
+                    changeset.may_insert(self.notify_entry_update(path.clone()));
+                }
             } else {
                 let watched = self.inner.content(path);
                 changeset.inserts.push((path.clone(), watched.into()));

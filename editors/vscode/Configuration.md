@@ -341,6 +341,33 @@ This configuration specifies the way to resolved projects.
   - `"lockDatabase"` : Manage typst documents like what we did in Rust. For each workspace, tinymist tracks your preview and compilation history, and stores the information in a lock file. Tinymist will automatically selects the main file to use according to the lock file. This also allows other tools push preview and export tasks to language server by updating the lock file.
 - **Default**: `"singleFile"`
 
+## `tinymist.remoteEndpoint`
+
+Connects to a remotely deployed tinymist server instead of starting a local one. Use `ws://host:port` for a WebSocket server started by `tinymist lsp --ws host:port`, or `tcp://host:port` for `tinymist lsp --tcp host:port`. Leave it empty to keep using a local server. In remote mode the workspace files are streamed to the server on demand, so the server does not need a copy of the workspace, and local-only tooling such as the debug adapter and the coverage runner is unavailable.
+
+- **Type**: string | null
+- **Default**: `"ws://192.168.8.112:23626"`
+
+## `tinymist.remotePathMap`
+
+Maps local workspace paths to the paths seen by the remote server. This is only needed when the two sides use different path forms, for example a Linux server reading files from a Windows client.
+
+- **Type**: `array`
+- **Default**: `[]`
+
+## `tinymist.remotePreviewHost`
+
+The host used to reach the preview servers started by the remote tinymist server, for example `example.com`. It defaults to the host of `tinymist.remoteEndpoint`.
+
+- **Type**: string | null
+
+## `tinymist.remoteToken`
+
+The token sent to the remote tinymist server. It must match the `--auth-token` (or `TINYMIST_AUTH_TOKEN`) of the server. Prefer a variable reference such as `${env:TINYMIST_AUTH_TOKEN}` to avoid storing the token in plain text.
+
+- **Type**: string | null
+- **Default**: `"123456"`
+
 ## `tinymist.renderDocs`
 
 (Experimental) Whether to render typst elements in (hover) docs. In VS Code, when this feature is enabled, tinymist will store rendered results in the filesystem’s temporary storage to show them in the hover content. Note: Please disable this feature if the editor doesn’t support/handle image previewing in docs.

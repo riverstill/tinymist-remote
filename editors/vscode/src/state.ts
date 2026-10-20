@@ -8,6 +8,11 @@ interface ExtensionState {
     web: boolean;
     lsp: boolean;
     lspSystem: boolean;
+    /**
+     * Whether the language server runs on a remote host instead of a local
+     * process.
+     */
+    remote: boolean;
     export: boolean;
     task: boolean;
     devKit: boolean;
@@ -41,6 +46,7 @@ export const extensionState: ExtensionState = {
     web: false,
     lsp: true,
     lspSystem: true,
+    remote: false,
     export: true,
     testingDebug: true,
     task: true,

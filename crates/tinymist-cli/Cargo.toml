@@ -72,7 +72,7 @@ tinymist-query.workspace = true
 tinymist-render.workspace = true
 tinymist-std = { workspace = true, default-features = false }
 tinymist-task.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "io-std"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "io-std", "net", "sync"] }
 tokio-util.workspace = true
 toml.workspace = true
 ttf-parser.workspace = true
@@ -105,6 +105,7 @@ default = [
     "embed-fonts",
     "no-content-hint",
     "dap",
+    "remote-transport",
 ]
 
 cli = ["sync-ls/clap", "clap/wrap_help"]
@@ -136,6 +137,9 @@ export = ["tinymist/export"]
 lock = ["tinymist/lock"]
 open = ["tinymist/open", "dep:open"]
 preview = ["tinymist/preview", "tinymist-preview", "hyper-tungstenite"]
+# Serves the language server over a WebSocket connection, so that editor
+# frontends can connect to a remotely deployed tinymist.
+remote-transport = ["hyper-tungstenite"]
 trace = ["tinymist/trace"]
 battery = ["tinymist/battery"]
 

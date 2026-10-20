@@ -17,6 +17,8 @@ use crate::world::TaskInputs;
 use crate::*;
 
 mod watch;
+#[cfg(feature = "system")]
+pub use watch::FallbackAccessModel;
 pub use watch::WatchAccessModel;
 
 #[cfg(feature = "lock")]

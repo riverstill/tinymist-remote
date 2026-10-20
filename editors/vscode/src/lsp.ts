@@ -8,6 +8,8 @@ import type { SymbolInformation, LanguageClientOptions } from "vscode-languagecl
 import type { BaseLanguageClient as LanguageClient } from "vscode-languageclient";
 
 import { HoverDummyStorage } from "./features/hover-storage";
+import { localUriToRemoteUri, remoteUriToLocalUri, toLocalPath } from "./features/remote-paths";
+import { markRemoteClientStopped } from "./remote-config";
 import type { HoverTmpStorage } from "./features/hover-storage.tmp";
 import { extensionState } from "./state";
 import {
@@ -122,6 +124,8 @@ export class LanguageState {
       this._watcher = undefined;
     }
     if (this.client) {
+      // Avoids warning about a lost remote connection when stopping on purpose.
+      markRemoteClientStopped();
       await this.client.stop();
       this.client = undefined;
     }
@@ -518,7 +522,8 @@ export class LanguageState {
 
       const watchRead = async (currentClock: number, uri: vscode.Uri) => {
         console.log("watchRead", uri, currentClock, watches);
-        const uriStr = uri.toString();
+        // The server watches paths in its own path space.
+        const uriStr = localUriToRemoteUri(uri);
         if (!watches.has(uriStr)) {
           return;
         }
@@ -584,7 +589,9 @@ export class LanguageState {
 
       (async () => {
         const paths = Array.from(filesToRead);
-        const readFiles = await Promise.all(paths.map((path) => tryRead(vscode.Uri.parse(path))));
+        const readFiles = await Promise.all(
+          paths.map((path) => tryRead(remoteUriToLocalUri(path))),
+        );
 
         watcher();
 
@@ -596,7 +603,10 @@ export class LanguageState {
           .filter((change) => registerHasRead(change.uri, currentClock, change.content));
 
         console.log("fs watch read", currentClock, inserts, removes);
-        client.sendRequest(fsChange, { inserts, removes, isSync: true });
+        // The content is fetched on demand instead of being emitted by a sync
+        // event, so that the server schedules a recompilation for it. The
+        // server ignores `isSync` events to deduplicate the initial didOpen.
+        client.sendRequest(fsChange, { inserts, removes, isSync: false });
       })();
     });
   }
@@ -633,6 +643,9 @@ export class LanguageState {
         return;
       }
 
+      // The server reports paths in its own path space.
+      const filepath = toLocalPath(jump.filepath);
+
       function inputHasUri(
         input: unknown,
       ): input is vscode.TabInputText | vscode.TabInputCustom | vscode.TabInputNotebook {
@@ -651,7 +664,7 @@ export class LanguageState {
             continue;
           }
 
-          if (tab.input.uri.fsPath === jump.filepath) {
+          if (tab.input.uri.fsPath === filepath) {
             affiliatedColumn = group.viewColumn;
             break;
           }
@@ -663,8 +676,8 @@ export class LanguageState {
 
       // open this file and show in editor
       const doc =
-        vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === jump.filepath) ||
-        (await vscode.workspace.openTextDocument(jump.filepath));
+        vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === filepath) ||
+        (await vscode.workspace.openTextDocument(filepath));
       const col = affiliatedColumn || getSensibleTextEditorColumn();
       const editor = await vscode.window.showTextDocument(doc, col);
       const startPosition = new vscode.Position(jump.start[0], jump.start[1]);

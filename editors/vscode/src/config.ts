@@ -3,10 +3,37 @@ import * as vscode from "vscode";
 
 import { vscodeVariables } from "./vscode-variables";
 
+/**
+ * A mapping from a local path prefix to the path prefix seen by a remote
+ * tinymist server.
+ */
+export interface RemotePathMapping {
+  local: string;
+  remote: string;
+}
+
 export interface TinymistConfig {
   [key: string]: any;
   typingContinueCommentsOnNewline?: boolean;
   serverPath?: string;
+  /**
+   * The endpoint of a remotely deployed tinymist server, such as
+   * `ws://127.0.0.1:23626` or `tcp://127.0.0.1:23627`. Empty or missing means
+   * the extension launches a local server.
+   */
+  remoteEndpoint?: string | null;
+  /**
+   * The token used to authenticate against the remote tinymist server.
+   */
+  remoteToken?: string | null;
+  /**
+   * The host used to reach preview servers started by the remote server.
+   */
+  remotePreviewHost?: string | null;
+  /**
+   * Maps local workspace paths to paths seen by the remote server.
+   */
+  remotePathMap?: RemotePathMapping[] | null;
 }
 
 export const HTML_PREVIEWER_PREFIX = "html:";
@@ -73,6 +100,12 @@ const STR_VARIABLES = [
   "tinymist.rootPath",
   "outputPath",
   "tinymist.outputPath",
+  "remoteEndpoint",
+  "tinymist.remoteEndpoint",
+  "remoteToken",
+  "tinymist.remoteToken",
+  "remotePreviewHost",
+  "tinymist.remotePreviewHost",
 ];
 const STR_ARR_VARIABLES = ["fontPaths", "tinymist.fontPaths"];
 const COLOR_THEME = ["colorTheme", "tinymist.colorTheme"];

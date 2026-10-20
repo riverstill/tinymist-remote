@@ -6,7 +6,9 @@ import { tinymist } from "./lsp";
 import { extensionState } from "./state";
 
 import { previewPreload } from "./features/preview";
+import { setRemotePathMappings } from "./features/remote-paths";
 import { onEnterHandler } from "./lsp.on-enter";
+import { isRemoteMode } from "./remote-config";
 import { ExecContext, ExecResult, ICommand, IContext } from "./context";
 import { spawn } from "cross-spawn";
 
@@ -33,6 +35,7 @@ export type FeatureEntry =
 function configureEditorAndLanguage(context: ExtensionContext, trait: TinymistTrait) {
   const isDevMode = vscode.ExtensionMode.Development == context.extensionMode;
   const isWeb = extensionState.features.web;
+  const isRemote = extensionState.features.remote;
   const { config } = trait;
 
   // Inform server that we support named completion callback at the client side
@@ -43,11 +46,15 @@ function configureEditorAndLanguage(context: ExtensionContext, trait: TinymistTr
   config.supportClientCodelens = true;
   config.supportExtendedCodeAction = true;
   config.customizedShowDocument = true;
-  config.delegateFsRequests = false; // todo: detect live sharing.
+  // A remote server does not have a copy of the workspace, so the client
+  // provides file contents on demand instead.
+  config.delegateFsRequests = isRemote;
   // Sets shared features
   extensionState.features.preview = !isWeb && config.previewFeature === "enable";
   extensionState.features.wordSeparator = config.configureDefaultWordSeparator !== "disable";
-  extensionState.features.devKit = isDevMode || config.devKit === "enable";
+  extensionState.features.devKit = !isRemote && (isDevMode || config.devKit === "enable");
+  // Coverage and debugging spawn a local tinymist process.
+  extensionState.features.testingDebug = !isRemote;
   extensionState.features.dragAndDrop = !isWeb && config.dragAndDrop === "enable";
   extensionState.features.copyAndPaste = !isWeb && config.copyAndPaste === "enable";
   extensionState.features.onEnter = !isWeb && !!config.onEnterEvent;
@@ -96,6 +103,17 @@ export async function tinymistActivate(
   tinymist.context = context;
   const contextExt = new IContext(context);
 
+  // Detects the remote mode before configuring the editor and the language,
+  // because both depend on how file contents are provided to the server.
+  extensionState.features.remote = !extensionState.features.web && isRemoteMode(config);
+  setRemotePathMappings(extensionState.features.remote ? config.remotePathMap : undefined);
+  if (extensionState.features.remote) {
+    // There is no local binary to probe, since the server is reached over the
+    // network.
+    extensionState.features.lspSystem = false;
+    console.log("tinymist: using the remote server", config.remoteEndpoint);
+  }
+
   // Sets a global context key to indicate that the extension is activated
   vscode.commands.executeCommand("setContext", "ext.tinymistActivated", true);
   context.subscriptions.push({
@@ -141,7 +159,9 @@ export async function tinymistActivate(
       isProbed = true;
       contextExt.tinymistExec = makeExecCommand(contextExt, executable);
     } catch (e) {
-      vscode.window.showErrorMessage(`Cannot find a valid tinymist binary. Some features like auto-formatting on Enter may not work. Please check your tinymist.serverPath configuration. Exception: ${e}`);
+      vscode.window.showErrorMessage(
+        `Cannot find a valid tinymist binary. Some features like auto-formatting on Enter may not work. Please check your tinymist.serverPath configuration. Exception: ${e}`,
+      );
     }
   }
 

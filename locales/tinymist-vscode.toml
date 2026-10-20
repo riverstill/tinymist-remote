@@ -1280,6 +1280,54 @@ zh = "服务器二进制文件路径"
 en = "The extension can use a local tinymist executable instead of the one bundled with the extension. This setting controls the path to the executable. The string \"tinymist\" means look up Tinymist in PATH."
 zh = "扩展可以使用本地 tinymist 可执行文件，而不是与扩展捆绑的可执行文件。此设置控制可执行文件的路径。字符串 \"tinymist\" 表示在 PATH 中查找 Tinymist。"
 
+[extension.tinymist.config.tinymist.remoteEndpoint.title]
+en = "Remote Server Endpoint"
+zh = "远程服务器端点"
+
+[extension.tinymist.config.tinymist.remoteEndpoint.desc]
+en = "Connects to a remotely deployed tinymist server instead of starting a local one. Use `ws://host:port` for a WebSocket server started by `tinymist lsp --ws host:port`, or `tcp://host:port` for `tinymist lsp --tcp host:port`. Leave it empty to keep using a local server. In remote mode the workspace files are streamed to the server on demand, so the server does not need a copy of the workspace, and local-only tooling such as the debug adapter and the coverage runner is unavailable."
+zh = "连接到远程部署的 tinymist 服务器，而不是启动本地服务器。`ws://host:port` 对应 `tinymist lsp --ws host:port` 启动的 WebSocket 服务，`tcp://host:port` 对应 `tinymist lsp --tcp host:port`。留空则继续使用本地服务器。远程模式下工作区文件会按需回传给服务端，因此服务端不需要保存工作区副本，同时调试适配器、覆盖率统计等依赖本地进程的功能不可用。"
+
+[extension.tinymist.config.tinymist.remoteToken.title]
+en = "Remote Server Token"
+zh = "远程服务器令牌"
+
+[extension.tinymist.config.tinymist.remoteToken.desc]
+en = "The token sent to the remote tinymist server. It must match the `--auth-token` (or `TINYMIST_AUTH_TOKEN`) of the server. Prefer a variable reference such as `${env:TINYMIST_AUTH_TOKEN}` to avoid storing the token in plain text."
+zh = "发送给远程 tinymist 服务器的令牌，必须与服务端 `--auth-token`（或 `TINYMIST_AUTH_TOKEN`）一致。建议使用 `${env:TINYMIST_AUTH_TOKEN}` 这类变量引用，避免以明文保存令牌。"
+
+[extension.tinymist.config.tinymist.remotePreviewHost.title]
+en = "Remote Preview Host"
+zh = "远程预览主机"
+
+[extension.tinymist.config.tinymist.remotePreviewHost.desc]
+en = "The host used to reach the preview servers started by the remote tinymist server, for example `example.com`. It defaults to the host of `tinymist.remoteEndpoint`."
+zh = "用于访问远程 tinymist 服务器所启动预览服务的主机，例如 `example.com`。默认使用 `tinymist.remoteEndpoint` 的主机名。"
+
+[extension.tinymist.config.tinymist.remotePathMap.title]
+en = "Remote Path Mapping"
+zh = "远程路径映射"
+
+[extension.tinymist.config.tinymist.remotePathMap.desc]
+en = "Maps local workspace paths to the paths seen by the remote server. This is only needed when the two sides use different path forms, for example a Linux server reading files from a Windows client."
+zh = "把本地工作区路径映射为远程服务器看到的路径。仅当两端路径形式不同时才需要，例如 Linux 服务端读取来自 Windows 客户端的文件。"
+
+[extension.tinymist.config.tinymist.remotePathMap.local.title]
+en = "local prefix"
+zh = "本地前缀"
+
+[extension.tinymist.config.tinymist.remotePathMap.local.desc]
+en = "The local path prefix, such as `C:\\Users\\me\\notes`."
+zh = "本地路径前缀，例如 `C:\\Users\\me\\notes`。"
+
+[extension.tinymist.config.tinymist.remotePathMap.remote.title]
+en = "remote prefix"
+zh = "远程前缀"
+
+[extension.tinymist.config.tinymist.remotePathMap.remote.desc]
+en = "The path prefix as seen by the remote server, such as `/workspace/notes`."
+zh = "远程服务器看到的路径前缀，例如 `/workspace/notes`。"
+
 [extension.tinymist.config.tinymist.trace.server.title]
 en = "Trace Server"
 zh = "跟踪服务器"

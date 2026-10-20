@@ -36,8 +36,16 @@ import { askPageSelection, commandShow, exportActivate, quickExports } from "./f
 import { resolveCodeAction } from "./lsp.code-action";
 import { HoverTmpStorage } from "./features/hover-storage.tmp";
 import { createSystemLanguageClient } from "./lsp.system";
+import { createRemoteLanguageClient } from "./lsp.remote";
+import { isRemoteMode } from "./remote-config";
 
-LanguageState.Client = createSystemLanguageClient;
+// The frontend is separated from the language service: a configured remote
+// endpoint connects to a deployed server, while the default setup keeps
+// launching the bundled executable.
+LanguageState.Client = (context, config, clientOptions) =>
+  isRemoteMode(config)
+    ? createRemoteLanguageClient(context, config, clientOptions)
+    : createSystemLanguageClient(context, config, clientOptions);
 LanguageState.HoverTmpStorage = HoverTmpStorage;
 
 const systemActivateTable = (): FeatureEntry[] => [
