@@ -26,6 +26,11 @@ pub struct ManagerApp {
     stop_on_exit: bool,
     /// Whether the manager should exit after handling the current frame.
     exiting: bool,
+    /// Frames to wait before hiding the window at startup, if any.
+    ///
+    /// eframe forces the window visible after the first frame, so the initial
+    /// hiding must happen on a later frame to stick.
+    hide_countdown: Option<u32>,
     /// The name of the service whose log is displayed.
     log_view: Option<(String, String)>,
 }
@@ -119,9 +124,16 @@ impl ManagerApp {
         config: ManagerConfig,
         config_path: Option<PathBuf>,
         start_hidden: bool,
+        hwnd: Option<isize>,
+        hwnd_slot: super::tray::SharedHwnd,
     ) -> Self {
-        if start_hidden {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        // Publishes the native window handle so that the tray thread can
+        // restore the window while the repaint loop is suspended (a hidden
+        // window receives no repaint events on Windows).
+        if let Some(hwnd) = hwnd
+            && let Ok(mut slot) = hwnd_slot.lock()
+        {
+            *slot = Some(hwnd);
         }
         Self {
             ctx,
@@ -134,6 +146,7 @@ impl ManagerApp {
             show_tokens: false,
             stop_on_exit: true,
             exiting: false,
+            hide_countdown: start_hidden.then_some(1),
             log_view: None,
         }
     }
@@ -143,15 +156,11 @@ impl ManagerApp {
         while let Ok(message) = self.tray_rx.try_recv() {
             match message {
                 TrayMessage::Open => {
+                    // The tray thread already made the window visible with
+                    // Win32 calls; this only raises and focuses it.
                     self.ctx
                         .send_viewport_cmd(egui::ViewportCommand::Visible(true));
                     self.ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-                }
-                TrayMessage::StartAll => {
-                    let _ = self.command_tx.send(ServiceCommand::StartAll);
-                }
-                TrayMessage::StopAll => {
-                    let _ = self.command_tx.send(ServiceCommand::StopAll);
                 }
                 TrayMessage::Quit => {
                     if self.stop_on_exit {
@@ -410,6 +419,15 @@ impl ManagerApp {
 
 impl eframe::App for ManagerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // eframe forces the window visible right after the first frame, so the
+        // startup hiding waits one extra frame to take effect.
+        if self.hide_countdown == Some(0) {
+            self.hide_countdown = None;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        } else if let Some(count) = self.hide_countdown.as_mut() {
+            *count -= 1;
+        }
+
         self.poll_tray();
 
         if self.exiting {

@@ -7660,6 +7660,7 @@ dependencies = [
  "parking_lot",
  "paste",
  "protobuf",
+ "raw-window-handle",
  "rayon",
  "reflexo",
  "reflexo-typst",

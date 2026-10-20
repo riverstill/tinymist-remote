@@ -93,6 +93,7 @@ dapts.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 eframe = { workspace = true, optional = true }
+raw-window-handle = { workspace = true, optional = true }
 sysinfo = { workspace = true, optional = true }
 tray-icon = { workspace = true, optional = true }
 windows-sys = { workspace = true, optional = true, features = [
@@ -124,7 +125,13 @@ default = [
 
 # A desktop manager that supervises multiple language server services with a
 # graphical interface. It is only built for Windows targets.
-manage = ["dep:eframe", "dep:sysinfo", "dep:tray-icon", "dep:windows-sys"]
+manage = [
+    "dep:eframe",
+    "dep:raw-window-handle",
+    "dep:sysinfo",
+    "dep:tray-icon",
+    "dep:windows-sys",
+]
 
 cli = ["sync-ls/clap", "clap/wrap_help"]
 

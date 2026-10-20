@@ -47,7 +47,8 @@ pub fn manage_main(args: ManageArgs) -> anyhow::Result<()> {
     }
 
     let (tray_tx, tray_rx) = mpsc::channel();
-    tray::spawn(tray_tx);
+    let hwnd_slot: tray::SharedHwnd = Arc::new(Mutex::new(None));
+    tray::spawn(tray_tx, command_tx.clone(), hwnd_slot.clone());
 
     let icon = egui::IconData {
         width: 32,
@@ -76,6 +77,8 @@ pub fn manage_main(args: ManageArgs) -> anyhow::Result<()> {
             app_config,
             config_path,
             minimized,
+            extract_hwnd(cc),
+            hwnd_slot,
         )) as Box<dyn eframe::App>)
     };
 
@@ -86,4 +89,14 @@ pub fn manage_main(args: ManageArgs) -> anyhow::Result<()> {
     let _ = command_tx.send(ServiceCommand::StopAll);
     std::thread::sleep(std::time::Duration::from_millis(300));
     Ok(())
+}
+
+/// Extracts the Win32 window handle from the creation context.
+fn extract_hwnd(cc: &eframe::CreationContext) -> Option<isize> {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+    match cc.window_handle().ok()?.as_raw() {
+        RawWindowHandle::Win32(handle) => Some(handle.hwnd.get()),
+        _ => None,
+    }
 }

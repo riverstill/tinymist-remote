@@ -5,15 +5,16 @@ use std::sync::mpsc::Sender;
 use tray_icon::TrayIconBuilder;
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 
+use super::supervisor::ServiceCommand;
+
+/// The native window handle shared between the application and the tray icon.
+pub type SharedHwnd = std::sync::Arc<std::sync::Mutex<Option<isize>>>;
+
 /// A message sent from the tray menu to the application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrayMessage {
     /// Shows the manager window.
     Open,
-    /// Starts all the services.
-    StartAll,
-    /// Stops all the services.
-    StopAll,
     /// Exits the manager.
     Quit,
 }
@@ -25,11 +26,15 @@ const MENU_STOP_ALL: &str = "tinymist-manage-stop-all";
 const MENU_QUIT: &str = "tinymist-manage-quit";
 
 /// Runs the tray icon on a dedicated thread with a Win32 message pump.
-pub fn spawn(event_tx: Sender<TrayMessage>) -> std::thread::JoinHandle<()> {
+pub fn spawn(
+    event_tx: Sender<TrayMessage>,
+    command_tx: Sender<ServiceCommand>,
+    hwnd_slot: SharedHwnd,
+) -> std::thread::JoinHandle<()> {
     std::thread::Builder::new()
         .name("tinymist-manager-tray".to_string())
         .spawn(move || {
-            if let Err(err) = run(event_tx) {
+            if let Err(err) = run(event_tx, command_tx, hwnd_slot) {
                 log::error!("the tray icon failed: {err}");
             }
         })
@@ -37,7 +42,11 @@ pub fn spawn(event_tx: Sender<TrayMessage>) -> std::thread::JoinHandle<()> {
 }
 
 /// Builds the tray icon and pumps its messages until the thread is killed.
-fn run(event_tx: Sender<TrayMessage>) -> Result<(), Box<dyn std::error::Error>> {
+fn run(
+    event_tx: Sender<TrayMessage>,
+    command_tx: Sender<ServiceCommand>,
+    hwnd_slot: SharedHwnd,
+) -> Result<(), Box<dyn std::error::Error>> {
     let icon = tray_icon::Icon::from_rgba(icon_rgba(), 32, 32)?;
 
     let open = MenuItem::with_id(MENU_OPEN, "Open Manager", true, None);
@@ -70,20 +79,57 @@ fn run(event_tx: Sender<TrayMessage>) -> Result<(), Box<dyn std::error::Error>> 
         // The tray icon is driven by the Win32 message pump below.
         pump_messages();
 
+        // The eframe repaint loop is suspended while the window is hidden, so
+        // the tray thread restores the window itself instead of relying on
+        // viewport commands processed by the suspended application.
+        let hwnd = hwnd_slot.lock().ok().and_then(|slot| *slot);
+
         while let Ok(event) = receiver.try_recv() {
-            let message = match event.id().as_ref() {
-                MENU_OPEN => Some(TrayMessage::Open),
-                MENU_START_ALL => Some(TrayMessage::StartAll),
-                MENU_STOP_ALL => Some(TrayMessage::StopAll),
-                MENU_QUIT => Some(TrayMessage::Quit),
-                _ => None,
-            };
-            if let Some(message) = message {
-                let _ = event_tx.send(message);
+            match event.id().as_ref() {
+                MENU_OPEN => {
+                    if let Some(hwnd) = hwnd {
+                        show_window(hwnd);
+                    }
+                    let _ = event_tx.send(TrayMessage::Open);
+                }
+                MENU_START_ALL => {
+                    let _ = command_tx.send(ServiceCommand::StartAll);
+                }
+                MENU_STOP_ALL => {
+                    let _ = command_tx.send(ServiceCommand::StopAll);
+                }
+                MENU_QUIT => {
+                    // Resumes the repaint loop first so that the application
+                    // can process the quit message and stop all the services.
+                    if let Some(hwnd) = hwnd {
+                        show_window(hwnd);
+                    }
+                    let _ = event_tx.send(TrayMessage::Quit);
+                }
+                _ => {}
             }
         }
 
         std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+/// Shows and focuses the manager window from the tray thread.
+fn show_window(hwnd: isize) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        IsIconic, IsWindowVisible, SW_RESTORE, SW_SHOW, SetForegroundWindow, ShowWindow,
+    };
+
+    // SAFETY: `hwnd` is the eframe window handle captured at creation time and
+    // stays valid until the window is destroyed.
+    unsafe {
+        let hwnd = hwnd as _;
+        if IsIconic(hwnd) != 0 {
+            ShowWindow(hwnd, SW_RESTORE);
+        } else if IsWindowVisible(hwnd) == 0 {
+            ShowWindow(hwnd, SW_SHOW);
+        }
+        SetForegroundWindow(hwnd);
     }
 }
 
