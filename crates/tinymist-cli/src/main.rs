@@ -12,6 +12,8 @@ mod cmd {
     pub mod generate_script;
     pub mod lint;
     pub mod lsp;
+    #[cfg(all(windows, feature = "manage"))]
+    pub mod manage;
     #[cfg(feature = "export")]
     pub mod package;
     #[cfg(feature = "preview")]
@@ -83,6 +85,9 @@ enum Commands {
 
     /// Run language server
     Lsp(crate::lsp::LspArgs),
+    /// Manage multiple language server services with a graphical interface
+    #[cfg(all(windows, feature = "manage"))]
+    Manage(crate::manage::ManageArgs),
     /// Run debug adapter
     #[cfg(feature = "dap")]
     Dap(crate::dap::DapArgs),
@@ -169,6 +174,8 @@ fn main() -> Result<()> {
 
         // Long-running commands, usually run from an editor.
         Commands::Lsp(..) => true,
+        #[cfg(all(windows, feature = "manage"))]
+        Commands::Manage(..) => false,
         #[cfg(feature = "dap")]
         Commands::Dap(..) => true,
 
@@ -192,6 +199,8 @@ fn main() -> Result<()> {
         Commands::Probe => Ok(()),
 
         Commands::Lsp(args) => crate::lsp::lsp_main(args),
+        #[cfg(all(windows, feature = "manage"))]
+        Commands::Manage(args) => Ok(crate::cmd::manage::manage_main(args)?),
         #[cfg(feature = "dap")]
         Commands::Dap(args) => crate::dap::dap_main(args),
         Commands::TraceLsp(args) => crate::trace_lsp::trace_lsp_main(args),

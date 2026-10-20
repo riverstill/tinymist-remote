@@ -91,6 +91,19 @@ walkdir.workspace = true
 
 dapts.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+eframe = { workspace = true, optional = true }
+sysinfo = { workspace = true, optional = true }
+tray-icon = { workspace = true, optional = true }
+windows-sys = { workspace = true, optional = true, features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_Networking_WinSock",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [features]
 default = [
     "cli",
@@ -106,7 +119,12 @@ default = [
     "no-content-hint",
     "dap",
     "remote-transport",
+    "manage",
 ]
+
+# A desktop manager that supervises multiple language server services with a
+# graphical interface. It is only built for Windows targets.
+manage = ["dep:eframe", "dep:sysinfo", "dep:tray-icon", "dep:windows-sys"]
 
 cli = ["sync-ls/clap", "clap/wrap_help"]
 

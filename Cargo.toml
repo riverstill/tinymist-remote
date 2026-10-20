@@ -54,6 +54,16 @@ time = "0.3"
 walkdir = "2"
 windows-sys = "0.61.2"
 
+# Graphical service manager (Windows only)
+eframe = { version = "0.32", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+sysinfo = "0.37"
+tray-icon = "0.21"
+
 # Web
 console_error_panic_hook = { version = "0.1.7" }
 js-sys = "^0.3"
